@@ -21,6 +21,10 @@ data ScanQrHint
   = ViewReceipt ReceiptD
   | EnterShortCode (Maybe String)
 
+  -- /viewreceipt?key=awdawdad&receipt=
+
+derive instance genericScanQrHint :: Generic (ScanQrHint) _
+
 data ScanQrRoute a
   = QrScanner (QrScannerAction -> a)
   | ShortCode (String -> a)
@@ -31,7 +35,7 @@ derive instance functorSQR :: Functor (ScanQrRoute)
 derive instance genericSQR :: Generic (ScanQrRoute a) _
 
 instance toPushRouteSQR :: ToPushAction ScanQrRoute ScanQrHint where
-  toPushAction r h = genericToPushAction r
+  toPushAction r h = genericToPushAction r h
 
 qrscannerR :: ScanQrRoute QrScannerAction
 qrscannerR = QrScanner identity
@@ -50,21 +54,18 @@ fromTheStart = case _ of
   QrScannerESC -> onShortCode Nothing
   QrScannerD d -> submission d
   where
-  --   showReceipt receipt = navPush (receiptR receipt) receipt
   onShortCode code = do
     sc <- navPush (shortCodeR) (EnterShortCode code)
-    logShow ("onShortCode:" <> sc)
     submission sc
 
   submission d = do
-    logShow ("SUBMission:" <> d)
     res <- liftAff $ claim d
-    navPush (shortCodeR) (EnterShortCode Nothing) *> pure unit
-    navPush (shortCodeR) (EnterShortCode Nothing) *> pure unit
-    navPush (shortCodeR) (EnterShortCode Nothing) *> pure unit
     case res of
-      Right r -> navPush (shortCodeR) (EnterShortCode Nothing) *> pure unit
+      Right r -> showReceipt r
       Left l -> pure unit
+
+  showReceipt :: ReceiptD -> Flow ScanQrHint ScanQrRoute Unit
+  showReceipt receipt = navPush (receiptR receipt) (ViewReceipt receipt)
 
 realQrScanner :: FlowScreen ScanQrRoute ScanQrHint Unit
 realQrScanner = withPageProps qrScanner

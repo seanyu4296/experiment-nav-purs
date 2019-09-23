@@ -8,6 +8,8 @@ import Data.Generic.Rep (class Generic, Argument(..), Constructor(..), Product(.
 import Data.Generic.Rep as G
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
+import Data.Nullable (Nullable)
+import Data.Nullable as Nullable
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Debug.Trace (trace, traceM)
 import Effect (Effect)
@@ -33,6 +35,11 @@ foreign import data STACK :: NavType
 foreign import data BOTTOM_TAB :: NavType
 
 foreign import data Navigation :: Type -> Type
+
+foreign import data JSNavPushActionType :: Type
+
+jsNavPushAction :: JSNavPushActionType
+jsNavPushAction = unsafeCoerce "Navigation/PUSH"
 
 foreign import dispatch :: forall o. Navigation o -> Foreign -> Effect Unit
 
@@ -94,60 +101,83 @@ newtype FlowScreen (route :: Type -> Type) (hint :: Type) o
 -- Implementation
 -- dont i need to unwrap this
 class ToPushAction r hint where
-  toPushAction :: forall a. r a -> hint -> PushAction a
+  toPushAction :: forall a. r a -> hint -> JSNavPushAction a
 
-class GenericToPushAction g a | g -> a where
-  genToPushAction :: g -> PushAction a
+class GenToPushPartial g a | g -> a where
+  genToPushPartial :: g -> NavPushPartial a
 
-instance genToPushActionSum ::
-  ( GenericToPushAction l a
-  , GenericToPushAction r a
+instance genToPushPartialSum ::
+  ( GenToPushPartial l a
+  , GenToPushPartial r a
   ) =>
-  GenericToPushAction (Sum l r) a where
-  genToPushAction (Inl l) = genToPushAction l
-  genToPushAction (Inr r) = genToPushAction r
+  GenToPushPartial (Sum l r) a where
+  genToPushPartial (Inl l) = genToPushPartial l
+  genToPushPartial (Inr r) = genToPushPartial r
 
-instance genToPushActionNoInfo ::
+instance genToPushPartialNoInfo ::
   IsSymbol routeName =>
-  GenericToPushAction (Constructor routeName (Argument (i -> a))) a where
-  genToPushAction (Constructor (Argument f)) =
-    { type: "Navigation/PUSH"
-    , routeName: reflectSymbol (SProxy :: SProxy routeName)
-    , params:
-      { action: unsafeCoerce f
-      , hint: "entershortcode"
-      }
+  GenToPushPartial (Constructor routeName (Argument (i -> a))) a where
+  genToPushPartial (Constructor (Argument f)) =
+    { routeName: reflectSymbol (SProxy :: SProxy routeName)
+    , action: unsafeCoerce f -- a -> Flow
     }
 
-instance genToPushActionWithInfo ::
+instance genToPushPartialWithInfo ::
   IsSymbol routeName =>
-  GenericToPushAction (Constructor routeName (Product (Argument info) (Argument (i -> a)))) a where
-  genToPushAction (Constructor (Product (Argument information) (Argument f))) =
-    { type: "Navigation/PUSH"
-    , routeName: reflectSymbol (SProxy :: SProxy routeName)
-    , params:
-      { action: unsafeCoerce f
-      --      , info: information
-      , hint: "TODO"
-      }
+  GenToPushPartial (Constructor routeName (Product (Argument info) (Argument (i -> a)))) a where
+  genToPushPartial (Constructor (Product (Argument information) (Argument f))) =
+    { routeName: reflectSymbol (SProxy :: SProxy routeName)
+    , action: unsafeCoerce f
     }
 
 -- I dont need the "r" in the GenericToPushAction because it is already in the Generic in the form of g
 genericToPushAction ::
-  forall r a g.
+  forall r a g hint hg.
   Generic (r a) g =>
-  GenericToPushAction g a =>
+  Generic hint hg =>
+  GenToPushPartial g a =>
   r a ->
-  PushAction a
-genericToPushAction = genToPushAction <<< G.from
+  hint ->
+  JSNavPushAction a
+genericToPushAction route hint =
+  { routeName
+  , type: jsNavPushAction
+  , params:
+    { action
+    , hint: Nullable.null
+    }
+  }
+  where
+  pp@{ routeName, action } = genToPushPartial <<< G.from $ route
 
-type PushAction a
-  = { type :: String
-    , routeName :: String
+type NavPushPartial a
+  = { routeName :: String
+    , action :: Foreign -> a
+    }
+
+type NavPushHint
+  = Nullable { name :: String, args :: Nullable Foreign }
+
+-- Hints should be only with name and a flat record maximum usage of Primitive such as (Maybe, Boolean, Int, String)
+-- Hints should be with a name and an argument that is a record with key not being used
+-- hint -> String
+-- String -> Maybe hint (if this fails use the fromTheStart if not use notFromTheStart)
+-- TODO: create generic hint thingy
+-- TODO: create a function for translating string -> maybe hint
+-- if Just add new state
+-- There is a translator for Just hint -> (hint -> Flow ...) -> NavigationPartialState
+-- maybe it makes sense there is no aff support but loadAuthToken sa top
+-- if first screen is Aff -> just do loading?? where to run the aff?
+-- the aff runs on the initialRoute so to achieve this create something like
+-- : add some state to the initialRoute that needs to run didMount then setState new cb
+-- : modify withpageProps
+type JSNavPushAction a
+  = { routeName :: String
+    -- TODO: this can be a better type
+    , type :: JSNavPushActionType
     , params ::
       { action :: Foreign -> a
-      , hint :: String
-      --      , info :: Maybe i
+      , hint :: NavPushHint
       }
     }
 
@@ -192,8 +222,9 @@ withPageProps comp = FlowScreen $ toReactComponent identity withPagePropsC { ren
     let
       -- get the action
       action :: a -> Flow hint route o
-      action = trace (getAction self.props.navigation) (const $ getAction self.props.navigation)
+      action = getAction self.props.navigation
     in
       comp
         { submit: \a -> resumeFlow self.props.navigation (action a)
         }
+ -- TODO: implemenet codec for hint -- TODO: implement codec for info -- TODO: implement other actions -- TODO: implemenet getting info for first screen??? -- TODO: navigator and sub navigators is there a correlation with hoisting check navigation-ex comments regarding use of static -- TODO: implement deriving of url in purescript how do u derive nested navigators

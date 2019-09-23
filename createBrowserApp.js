@@ -162,8 +162,7 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
     _title = document.title;
     _actionEventSubscribers = new Set();
     componentDidMount() {
-      // i do not agreee with how this works
-      // setHistoryListener(this);
+      setHistoryListener(this);
       //      this.updateTitle();
       this._actionEventSubscribers.forEach((subscriber) =>
         subscriber({
@@ -218,13 +217,13 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
     dispatch = (action) => {
       const lastState = this.state.nav;
       const newState = App.router.getStateForAction(action, lastState);
-      console.log('NEWSTATE:', newState);
-      // function LogNav(s, a) {
-      //   this.STATE = s;
-      //   this.ACTION = a;
-      //   this.ACTIONTYPE = a.type;
-      // }
-      // console.log(new LogNav(newState, action));
+
+      function LogNav(s, a) {
+        this.STATE = s;
+        this.ACTION = a;
+        this.ACTIONTYPE = a.type;
+      }
+      console.log(new LogNav(newState, action));
       const dispatchEvents = () =>
         this._actionEventSubscribers.forEach((subscriber) =>
           subscriber({
@@ -243,17 +242,17 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
         // -- If there is a hint for that step insert it?? but how??? - through state?
         // /onboarding/entermobile?key=id-123124125
         // /onboarding?key=12412125
-        // if (action.type !== 'BROWSER_ACTION') {
-        //   translateBrowserAction(
-        //     history,
-        //     deriveBrowserAction(
-        //       action,
-        //       App.router.getTreeInfo(newState),
-        //       lastState,
-        //       newState
-        //     )
-        //   );
-        // }
+        if (action.type !== 'BROWSER_ACTION') {
+          translateBrowserAction(
+            history,
+            deriveBrowserAction(
+              action,
+              App.router.getTreeInfo(newState),
+              lastState,
+              newState
+            )
+          );
+        }
         // if stack look at routes and index and routeName, /scanqr/entermobile-1234
         // if bottom tabs look at routes and index, /home/catalog
         // if switch look at routes and index, /top/login
