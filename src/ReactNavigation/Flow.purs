@@ -1,6 +1,7 @@
 module ExpN.ReactNavigation.Flow where
 
 import Prelude
+import Prelude
 import Control.Monad.Free (Free, liftF)
 import Control.Monad.Free as Free
 import Data.Either (Either(..))
@@ -19,9 +20,15 @@ import Effect.Class (class MonadEffect)
 import Effect.Class.Console (logShow)
 import Effect.Console (log, warn)
 import Foreign (Foreign, unsafeToForeign)
+import Foreign.Object (Object)
+import Foreign.Object as FO
+import Prim.Row as Row
+import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import React.Basic (Component, JSX, ReactComponent, createComponent, makeStateless, toReactComponent)
 import React.Basic.Events (handler_)
 import React.Basic.Native as RN
+import Record (get)
+import Type.Data.RowList (RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
 foreign import kind NavType
@@ -50,6 +57,7 @@ foreign import getAction :: forall route hint o a. Navigation o -> (a -> Flow ro
 -- Add HINT
 data FlowM hint (route :: Type -> Type) a
   = NavPush (route a) hint
+  | NavPushH (route a) hint
   | NavGoBack
   | NavEff (Effect a)
   | NavAff (Aff a)
@@ -135,6 +143,7 @@ genericToPushAction ::
   forall r a g hint hg.
   Generic (r a) g =>
   Generic hint hg =>
+  GenHint hg =>
   GenToPushPartial g a =>
   r a ->
   hint ->
@@ -144,10 +153,12 @@ genericToPushAction route hint =
   , type: jsNavPushAction
   , params:
     { action
-    , hint: Nullable.null
+    , hint: hintString
     }
   }
   where
+  hintString = toPath <<< G.from $ hint
+
   pp@{ routeName, action } = genToPushPartial <<< G.from $ route
 
 type NavPushPartial a
@@ -156,7 +167,70 @@ type NavPushPartial a
     }
 
 type NavPushHint
-  = Nullable { name :: String, args :: Nullable Foreign }
+  = { path :: String, query :: Object String }
+
+class GenHint a where
+  toPath :: a -> NavPushHint
+
+instance genHintSum ::
+  ( GenHint l
+  , GenHint r
+  ) =>
+  GenHint (Sum l r) where
+  toPath (Inl l) = toPath l
+  toPath (Inr r) = toPath r
+
+instance genHintConstructorArgR ::
+  ( IsSymbol hintName
+  , Row.Lacks "key" r
+  , RowToList r rl
+  , ToQuery rl r
+  ) =>
+  GenHint (Constructor hintName (Argument { | r })) where
+  toPath (Constructor (Argument val)) = { path, query }
+    where
+    path = reflectSymbol (SProxy :: SProxy hintName)
+
+    query = toQuery (RLProxy :: RLProxy rl) val
+
+class ToQuery (rl :: RowList) (r :: #Type) where
+  toQuery :: RLProxy rl -> { | r } -> Object String
+
+instance toQueryNil :: ToQuery Nil r where
+  toQuery _ _ = FO.empty
+
+instance toQueryCons ::
+  ( IsSymbol name
+  , ToQueryString typ
+  , Row.Cons name typ etc r
+  , ToQuery tailrl r
+  ) =>
+  ToQuery (Cons name typ tailrl) r where
+  toQuery _ r = FO.insert key value tail
+    where
+    sp = SProxy :: SProxy name
+
+    key = reflectSymbol sp
+
+    value = toQueryString $ get sp r
+
+    tail = toQuery (RLProxy :: RLProxy tailrl) r
+
+class ToQueryString a where
+  toQueryString :: a -> String
+
+instance toQueryStringString :: ToQueryString String where
+  toQueryString = identity
+
+instance toQueryStringBoolean :: ToQueryString Boolean where
+  toQueryString true = "true"
+  toQueryString false = "false"
+
+instance toQueryStringInt :: ToQueryString Int where
+  toQueryString i = show i
+
+instance toQueryStringNumber :: ToQueryString Number where
+  toQueryString n = show n
 
 -- Hints should be only with name and a flat record maximum usage of Primitive such as (Maybe, Boolean, Int, String)
 -- Hints should be with a name and an argument that is a record with key not being used
@@ -193,6 +267,7 @@ resumeFlow nav flow = loop flow
   where
   loop f = case Free.resume (unwrap f) of
     Left (NavPush r h) -> dispatch nav $ unsafeToForeign (toPushAction r h)
+    Left (NavPushH r h) -> dispatch nav $ unsafeToForeign (toPushAction r h)
     Left (NavAff aff) ->
       runAff_
         ( case _ of

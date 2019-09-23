@@ -51,14 +51,19 @@ function getHistory(history) {
 
 function deriveBrowserAction(a, ti, ps, s) {
   function getNewURLFromLatestRoute(treeInfo, state) {
+    // TODO: this should be written in purescript
     const s = state;
     console.log('getNewURLFromLatestRoute:', state);
     if (state) {
       const hintS =
         s.routes[s.index].params && s.routes[s.index].params.hint
-          ? s.routes[s.index].params.hint
+          ? s.routes[s.index].params.hint.path
           : '';
-      return treeInfo.flowName + '/' + hintS + '?key=' + s.routes[s.index].key;
+      const q = queryString.stringify({
+        key: s.routes[s.index].key,
+        ...(hintS ? s.routes[s.index].params.hint.query : {}),
+      });
+      return treeInfo.flowName + '/' + hintS + '?' + q;
     }
     return '';
   }

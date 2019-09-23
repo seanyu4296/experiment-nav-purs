@@ -13,16 +13,16 @@ import ExpN.Screens.ShortCode (shortCode)
 import ExpN.Screens.Types (QrScannerAction(..))
 
 type ReceiptD
-  = { points :: Int
+  = { id :: String
+    , points :: Int
     }
 
 data ScanQrHint
   -- if fail to parse receipt from query string, the flow starts from initialRoute
   = ViewReceipt ReceiptD
-  | EnterShortCode (Maybe String)
+  | EnterShortCode { code :: String }
 
-  -- /viewreceipt?key=awdawdad&receipt=
-
+-- /viewreceipt?key=awdawdad&receipt=
 derive instance genericScanQrHint :: Generic (ScanQrHint) _
 
 data ScanQrRoute a
@@ -47,15 +47,15 @@ receiptR :: ReceiptD -> ScanQrRoute Unit
 receiptR receipt = Receipt receipt identity
 
 claim :: String -> Aff (Either Unit ReceiptD)
-claim s = (pure $ Right { points: 1234 })
+claim s = (pure $ Right { id: "1", points: 1234 })
 
 fromTheStart :: QrScannerAction -> Flow ScanQrHint ScanQrRoute Unit
 fromTheStart = case _ of
-  QrScannerESC -> onShortCode Nothing
+  QrScannerESC -> onShortCode ""
   QrScannerD d -> submission d
   where
   onShortCode code = do
-    sc <- navPush (shortCodeR) (EnterShortCode code)
+    sc <- navPush (shortCodeR) (EnterShortCode { code })
     submission sc
 
   submission d = do
