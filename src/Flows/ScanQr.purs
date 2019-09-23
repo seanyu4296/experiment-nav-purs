@@ -7,7 +7,7 @@ import Data.Maybe (Maybe(..))
 import Effect.Aff (Aff)
 import Effect.Aff.Class (liftAff)
 import Effect.Class.Console (logShow)
-import ExpN.ReactNavigation.Flow (class MonadNav, class ToPushAction, Flow, FlowScreen(..), genericToPushAction, navPush, withPageProps)
+import ExpN.ReactNavigation.Flow (class MonadNav, class ToPushAction, Flow, FlowScreen(..), genericToPushAction, navPush, navPush_, withPageProps)
 import ExpN.Screens.QrScanner (qrScanner)
 import ExpN.Screens.ShortCode (shortCode)
 import ExpN.Screens.Types (QrScannerAction(..))
@@ -56,6 +56,7 @@ fromTheStart = case _ of
   where
   onShortCode code = do
     sc <- navPush (shortCodeR) (EnterShortCode { code })
+    _ <- navPush_ shortCodeR
     submission sc
 
   submission d = do

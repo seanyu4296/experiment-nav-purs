@@ -56,8 +56,7 @@ foreign import getAction :: forall route hint o a. Navigation o -> (a -> Flow ro
 
 -- Add HINT
 data FlowM hint (route :: Type -> Type) a
-  = NavPush (route a) hint
-  | NavPushH (route a) hint
+  = NavPush (route a) (Maybe hint)
   | NavGoBack
   | NavEff (Effect a)
   | NavAff (Aff a)
@@ -84,12 +83,14 @@ liftFFlow = Flow <<< liftF
 
 class
   Monad (n hint route) <= MonadNav n (hint :: Type) (route :: Type -> Type) where
+  navPush_ :: forall a. route a -> n hint route a
   navPush :: forall a. route a -> hint -> n hint route a
+  navPush' :: forall a. route a -> Maybe hint -> n hint route a
 
 instance flowMonadNav :: MonadNav Flow hint route where
-  navPush r h = do
-    value <- liftFFlow $ NavPush r h
-    pure $ value
+  navPush r h = navPush' r (Just h)
+  navPush_ r = navPush' r Nothing
+  navPush' r h = liftFFlow $ NavPush r h
 
 instance flowMonadEffect :: MonadEffect (Flow hint route) where
   liftEffect eff = liftFFlow <<< NavEff $ eff
@@ -109,7 +110,7 @@ newtype FlowScreen (route :: Type -> Type) (hint :: Type) o
 -- Implementation
 -- dont i need to unwrap this
 class ToPushAction r hint where
-  toPushAction :: forall a. r a -> hint -> JSNavPushAction a
+  toPushAction :: forall a. r a -> Maybe hint -> JSNavPushAction a
 
 class GenToPushPartial g a | g -> a where
   genToPushPartial :: g -> NavPushPartial a
@@ -146,7 +147,7 @@ genericToPushAction ::
   GenHint hg =>
   GenToPushPartial g a =>
   r a ->
-  hint ->
+  Maybe hint ->
   JSNavPushAction a
 genericToPushAction route hint =
   { routeName
@@ -157,7 +158,10 @@ genericToPushAction route hint =
     }
   }
   where
-  hintString = toPath <<< G.from $ hint
+  -- TODO: Change this to use maybe
+  hintString = case hint of
+    Just h -> Nullable.notNull <<< toPath <<< G.from $ h
+    Nothing -> Nullable.null
 
   pp@{ routeName, action } = genToPushPartial <<< G.from $ route
 
@@ -251,7 +255,7 @@ type JSNavPushAction a
     , type :: JSNavPushActionType
     , params ::
       { action :: Foreign -> a
-      , hint :: NavPushHint
+      , hint :: Nullable NavPushHint
       }
     }
 
@@ -267,7 +271,6 @@ resumeFlow nav flow = loop flow
   where
   loop f = case Free.resume (unwrap f) of
     Left (NavPush r h) -> dispatch nav $ unsafeToForeign (toPushAction r h)
-    Left (NavPushH r h) -> dispatch nav $ unsafeToForeign (toPushAction r h)
     Left (NavAff aff) ->
       runAff_
         ( case _ of
@@ -302,4 +305,12 @@ withPageProps comp = FlowScreen $ toReactComponent identity withPagePropsC { ren
       comp
         { submit: \a -> resumeFlow self.props.navigation (action a)
         }
- -- TODO: implemenet codec for hint -- TODO: implement codec for info -- TODO: implement other actions -- TODO: implemenet getting info for first screen??? -- TODO: navigator and sub navigators is there a correlation with hoisting check navigation-ex comments regarding use of static -- TODO: implement deriving of url in purescript how do u derive nested navigators
+ {-
+ -- // TODO: implemenet codec for hint
+ -- TODO: URL -> Maybe Hint -> Correct state or behavior
+ -- TODO: implement codec for info
+ -- TODO: implement other actions
+ -- TODO: implemenet getting info for first screen???
+ -- TODO: navigator and sub navigators is there a correlation with hoisting check navigation-ex comments regarding use of static
+ -- TODO: implement deriving of url in purescript how do u derive nested navigators
+ -}
