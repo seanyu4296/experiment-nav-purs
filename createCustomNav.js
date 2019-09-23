@@ -1,21 +1,11 @@
 import { createStackNavigator } from 'react-navigation-stack';
 import { StyleSheet, Text, View, Button } from 'react-native';
-import withPageProps from './withPageProps';
-import { testR } from './output/ExpN.ScanQr';
 import React from 'react';
 
 // console.log(testRPRan());
 // Flow -> InitialState?
 export default function createCustomNav(flowName, initialRoutes, config) {
-  const routes = {};
-  Object.keys(initialRoutes).forEach((key) => {
-    routes[key] = {
-      ...initialRoutes[key],
-      //      screen: withPageProps(initialRoutes[key].screen),
-    };
-  });
-  const MyStack = createStackNavigator(routes);
-  // '/entermobile'
+  const MyStack = createStackNavigator(initialRoutes);
   class CustomNavigator extends React.Component {
     static flow = {
       common: {

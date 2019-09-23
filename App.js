@@ -1,7 +1,11 @@
 import React from 'react';
 import ScanQr from './ScanQr';
 import ViewReceipt from './ViewReceipt';
-import { realShortCode } from './output/ExpN.ScanQr';
+import {
+  realShortCode,
+  realQrScanner,
+  fromTheStart,
+} from './output/ExpN.Flows.ScanQr';
 import { createBrowserApp } from './createBrowserApp';
 import createCustomNav from './createCustomNav';
 console.log(realShortCode);
@@ -14,12 +18,14 @@ const CustomNav = createCustomNav(
     ShortCode: {
       screen: realShortCode,
     },
-    ScanQr: {
-      screen: ScanQr,
+    QrScanner: {
+      screen: realQrScanner,
     },
   },
   {
-    initialRouteName: 'ScanQr',
+    // reflectSymbol something
+    initialRouteName: 'QrScanner',
+    fromTheStart: fromTheStart,
   }
 );
 const Root = createBrowserApp(CustomNav);

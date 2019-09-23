@@ -10,6 +10,7 @@ import Effect.Class.Console (logShow)
 import ExpN.ReactNavigation.Flow (class MonadNav, class ToPushAction, Flow, FlowScreen(..), genericToPushAction, navPush, withPageProps)
 import ExpN.Screens.QrScanner (qrScanner)
 import ExpN.Screens.ShortCode (shortCode)
+import ExpN.Screens.Types (QrScannerAction(..))
 
 type ReceiptD
   = { points :: Int
@@ -32,10 +33,6 @@ derive instance genericSQR :: Generic (ScanQrRoute a) _
 instance toPushRouteSQR :: ToPushAction ScanQrRoute ScanQrHint where
   toPushAction r h = genericToPushAction r
 
-data QrScannerAction
-  = QrScannerESC
-  | QrScannerD String
-
 qrscannerR :: ScanQrRoute QrScannerAction
 qrscannerR = QrScanner identity
 
@@ -48,7 +45,7 @@ receiptR receipt = Receipt receipt identity
 claim :: String -> Aff (Either Unit ReceiptD)
 claim s = (pure $ Right { points: 1234 })
 
-fromTheStart :: MonadNav Flow ScanQrHint ScanQrRoute => QrScannerAction -> Flow ScanQrHint ScanQrRoute Unit
+fromTheStart :: QrScannerAction -> Flow ScanQrHint ScanQrRoute Unit
 fromTheStart = case _ of
   QrScannerESC -> onShortCode Nothing
   QrScannerD d -> submission d

@@ -9,7 +9,7 @@ import Data.Generic.Rep as G
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
-import Debug.Trace (traceM)
+import Debug.Trace (trace, traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Milliseconds(..), delay, runAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -34,9 +34,10 @@ foreign import data BOTTOM_TAB :: NavType
 
 foreign import data Navigation :: Type -> Type
 
-dispatch :: forall o. Navigation o -> Foreign -> Effect Unit
-dispatch nav thing = (unsafeCoerce nav).dispatch thing
+foreign import dispatch :: forall o. Navigation o -> Foreign -> Effect Unit
 
+-- dispatch :: forall o. Navigation o -> Foreign -> Effect Unit
+-- dispatch nav thing = (unsafeCoerce nav).dispatch thing
 foreign import getAction :: forall route hint o a. Navigation o -> (a -> Flow route hint o)
 
 -- Add HINT
@@ -161,7 +162,7 @@ resumeFlow ::
 resumeFlow nav flow = loop flow
   where
   loop f = case Free.resume (unwrap f) of
-    Left (NavPush r h) -> logShow "PUSH" *> (dispatch nav $ unsafeToForeign (toPushAction r h))
+    Left (NavPush r h) -> dispatch nav $ unsafeToForeign (toPushAction r h)
     Left (NavAff aff) ->
       runAff_
         ( case _ of
@@ -191,7 +192,7 @@ withPageProps comp = FlowScreen $ toReactComponent identity withPagePropsC { ren
     let
       -- get the action
       action :: a -> Flow hint route o
-      action = getAction self.props.navigation
+      action = trace (getAction self.props.navigation) (const $ getAction self.props.navigation)
     in
       comp
         { submit: \a -> resumeFlow self.props.navigation (action a)
