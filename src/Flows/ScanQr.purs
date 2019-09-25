@@ -10,6 +10,7 @@ import Effect.Class.Console (logShow)
 import ExpN.ReactNavigation.Flow (class MonadNav, class ToPushAction, Flow, FlowScreen(..), genericToPushAction, navPush, navPush_, withPageProps)
 import ExpN.Screens.QrScanner (qrScanner)
 import ExpN.Screens.ShortCode (shortCode)
+import ExpN.Screens.Receipt (receipt)
 import ExpN.Screens.Types (QrScannerAction(..))
 
 type ReceiptD
@@ -51,34 +52,38 @@ claim s = (pure $ Right { id: "1", points: 1234 })
 
 fromTheStart :: QrScannerAction -> Flow ScanQrHint ScanQrRoute Unit
 fromTheStart = case _ of
-  QrScannerESC -> onShortCode ""
+  QrScannerESC -> onShortCode { code: "" } -- initial value for code? how do we get this tho from the hint?
   QrScannerD d -> submission d
-  where
-  onShortCode code = do
-    sc <- navPush (shortCodeR) (EnterShortCode { code })
-    _ <- navPush_ shortCodeR
-    submission sc
 
-  submission d = do
-    res <- liftAff $ claim d
-    case res of
-      Right r -> showReceipt r
-      Left l -> pure unit
+notFromTheStart :: ScanQrHint -> Flow ScanQrHint ScanQrRoute Unit
+notFromTheStart = case _ of
+  ViewReceipt receipt -> showReceipt receipt
+  EnterShortCode code -> onShortCode code
 
-  showReceipt :: ReceiptD -> Flow ScanQrHint ScanQrRoute Unit
-  showReceipt receipt = navPush (receiptR receipt) (ViewReceipt receipt)
+showReceipt :: ReceiptD -> Flow ScanQrHint ScanQrRoute Unit
+showReceipt receipt = navPush (receiptR receipt) (ViewReceipt receipt)
+
+onShortCode :: { code :: String } -> Flow ScanQrHint ScanQrRoute Unit
+onShortCode c = do
+  sc <- navPush (shortCodeR) (EnterShortCode c)
+  _ <- navPush_ shortCodeR
+  submission sc
+
+submission :: String -> Flow ScanQrHint ScanQrRoute Unit
+submission d = do
+  res <- liftAff $ claim d
+  case res of
+    Right r -> showReceipt r
+    Left l -> pure unit
 
 realQrScanner :: FlowScreen ScanQrRoute ScanQrHint Unit
 realQrScanner = withPageProps qrScanner
 
 realShortCode :: FlowScreen ScanQrRoute ScanQrHint Unit
 realShortCode = withPageProps shortCode
- {- realShortCode :: FlowScreen ScanQrRoute ScanQrHint Unit
--- realShortCode = withPageProps shortCode
 
-
-
-
+realReceipt :: FlowScreen ScanQrRoute ScanQrHint Unit
+realReceipt = withPageProps receipt
 
 
 -- scanQrFlow :: FlowNav STACK ScanQrRoute ScanQrAction Unit ScanQrHint

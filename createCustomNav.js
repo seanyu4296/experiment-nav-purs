@@ -2,11 +2,10 @@ import { createStackNavigator } from 'react-navigation-stack';
 import { StyleSheet, Text, View, Button } from 'react-native';
 import React from 'react';
 
-// console.log(testRPRan());
-// Flow -> InitialState?
-export default function createCustomNav(flowName, initialRoutes, config) {
-  const MyStack = createStackNavigator(initialRoutes);
+export default function createCustomNav(flowName, routeConfigs, config) {
+  const MyStack = createStackNavigator(routeConfigs);
   class CustomNavigator extends React.Component {
+    static flowName = flowName; // for traversing down the state
     static flow = {
       common: {
         showReceipt: ({ navigation, out }) => {
@@ -57,14 +56,6 @@ export default function createCustomNav(flowName, initialRoutes, config) {
         }
       },
     };
-    // this is very naive pa
-    static getHintFromPath = (path) => {
-      let subP = path.split('/')[1];
-      return {
-        type: subP,
-      };
-    };
-
     static getInitRoute = () => {
       // const { fromTheStart } = CustomNavigator.flow;
       // array of actions from callbacks then gobble up to state
@@ -92,6 +83,11 @@ export default function createCustomNav(flowName, initialRoutes, config) {
       ...MyStack.router,
       getStateForAction: (action, lastState) => {
         switch (action.type) {
+          case 'CLEAR-INIT-PATH':
+            return {
+              ...lastState,
+              initialPath: null,
+            };
           // have to seperate back and forward since
           case 'BROWSER_ACTION':
           // check flowName using action.path each navigator is a layer?
@@ -127,40 +123,55 @@ export default function createCustomNav(flowName, initialRoutes, config) {
           case 'BROWSER_FORWARD':
           case 'INIT-PATH-AND-PARAMS':
             const initRoute = CustomNavigator.getInitRoute();
-            const initRoutes = [initRoute];
-            if (action.path.startsWith(flowName)) {
-              // possible are
-              // - navDialog
-              // - navPush
-              // / navPopToTop
-              // / navReset
-              // / navBack
-
-              const hint = CustomNavigator.getHintFromPath(action.path);
-              if (hint.type) {
-                /* type AdditionalState =
-                  { dialog :: JSX
-                  , routes: Array Route
-                  , index: Number
-                  }
-                */
-                const additionalState = CustomNavigator.flow.notFromTheStart(
-                  hint
-                )({ navigation: CustomNavigator.navigationToDeriveState });
-                const addRoutes = additionalState ? additionalState.routes : [];
-                return {
-                  index: 0,
-                  ...lastState,
-                  ...additionalState,
-                  routes: [...initRoutes, ...addRoutes],
-                };
-              }
-              return {
+            let pathArr = action.path.split('/');
+            if (pathArr[0].startsWith(flowName)) {
+              let remainingPath = pathArr.slice(1);
+              let baseNewState = {
                 ...lastState,
-                store: [],
                 index: 0,
-                routes: initRoutes,
+                routes: [initRoute],
               };
+              if (remainingPath.length == 1) {
+                return {
+                  ...baseNewState,
+                  hintFromPath: remainingPath[0],
+                };
+              } else if (remainingPath.length > 1) {
+                // process it as a subflow to match
+                const childFlowNames = {};
+                const routeNames = Object.keys(routeConfigs);
+                routeNames.forEach((routeName) => {
+                  const routeConfig = routeConfigs[routeName];
+                  const screen =
+                    routeConfig && routeConfig.screen
+                      ? routeConfig.screen
+                      : routeConfig;
+                  if (screen && screen.flowName) {
+                    childFlowNames[screen.flowName] = routeName;
+                  } else {
+                  }
+                });
+                const matchedFlowName = childFlowNames[remainingPath[0]];
+                if (matchedFlowName) {
+                  // if matched a child flow initialize that flow traverse down
+                  const matchedFlowRoute = childFlowNames[matchedFlowName];
+                  const childFlowState = matchedFlowRoute.router.getStateForAction(
+                    {
+                      type: 'INIT-PATH-AND-PARAMS',
+                      path: remainingPath.slice(-1).join('/'),
+                    }
+                  );
+                  return {
+                    index: 1, // is this correct to assume that the childFlowState is index 1??? maybe this differs for each navigator
+                    ...baseNewState,
+                    routes: [...baseNewState.routes, childFlowState],
+                  };
+                }
+                return baseNewState;
+              } else {
+                // if nothing matches just normal initialState
+                return baseNewState;
+              }
             } else {
               // empty state if flow name does not match the first segment of the url
               return null;
@@ -170,26 +181,38 @@ export default function createCustomNav(flowName, initialRoutes, config) {
         }
       },
       getActionForPathAndParams: (path, params) => {
+        // this action should behave correctly for children?
+        /* { type: "", path: "", childActions}
+        // roughly getStateForAction will call children getStateForAction
+         */
         return {
           type: 'INIT-PATH-AND-PARAMS',
           path,
         };
       },
-      getTreeInfo: (state) => {
-        // if stack only look at the active route?
-        // if there is no router it is a screen
-        // -- if there is look at getTreeInfo to know if switch, stack or tabs
-        return {
-          type: 'STACK',
-          flowName,
-          children: [],
-        };
-      },
     };
+    componentDidMount() {
+      if (
+        this.props.navigation.state &&
+        this.props.navigation.state.hintFromPath
+      ) {
+        console.log('WTf???');
+        //         setTimeout(() => {
+        this.props.navigation.dispatch({
+          type: 'Navigation/PUSH',
+          routeName: 'ShortCode',
+          params: {
+            action: config.notFromTheStart,
+          },
+        });
+        //        }, 1000);
+      }
+    }
     render() {
       const { navigation } = this.props;
-
-      return <MyStack navigation={navigation} />;
+      // if there is path -> run notFromTheStart -> clear path through running an action?
+      // prevent from rendering the view since default StackViews does not support null state;
+      return navigation.state && <MyStack navigation={navigation} />;
     }
   }
   return CustomNavigator;

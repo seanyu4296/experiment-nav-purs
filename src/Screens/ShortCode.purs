@@ -12,4 +12,4 @@ c = createComponent "ShortCode"
 shortCode :: PageProps String -> JSX
 shortCode = makeStateless c render
   where
-  render props = RN.view_ [ RN.button { onPress: handler_ $ props.submit "hi", title: "TEST" } ]
+  render props = RN.view_ [ RN.button { onPress: handler_ $ props.submit "hi", title: "SHORTCODE" } ]

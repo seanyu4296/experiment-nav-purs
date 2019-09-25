@@ -14,10 +14,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 /* eslint-disable import/no-commonjs */
 const queryString = require('query-string');
 
-const getPathAndParamsFromLocation = (location) => {
+const getPathFromLocation = (location) => {
   const path = encodeURI(location.pathname.substr(1));
-  const params = queryString.parse(location.search);
-  return { path, params };
+  const qstring = queryString.stringify(queryString.parse(location.search));
+  if (path.endsWith('/')) {
+    // clean if there is trailing slash in the end
+    return path.slice(0, -1) + '?' + qstring;
+  }
+  return path + '?' + qstring;
 };
 
 const matchPathAndParams = (a, b) => {
@@ -49,11 +53,10 @@ function getHistory(history) {
   return history || createBrowserHistory();
 }
 
-function deriveBrowserAction(a, ti, ps, s) {
-  function getNewURLFromLatestRoute(treeInfo, state) {
+function deriveBrowserAction(a, navigator, ps, s) {
+  function getNewURLFromLatestRoute(flowName, state) {
     // TODO: this should be written in purescript
     const s = state;
-    console.log('getNewURLFromLatestRoute:', state);
     if (state) {
       const hintS =
         s.routes[s.index].params && s.routes[s.index].params.hint
@@ -63,7 +66,7 @@ function deriveBrowserAction(a, ti, ps, s) {
         key: s.routes[s.index].key,
         ...(hintS ? s.routes[s.index].params.hint.query : {}),
       });
-      return treeInfo.flowName + '/' + hintS + '?' + q;
+      return flowName + '/' + hintS + '?' + q;
     }
     return '';
   }
@@ -71,17 +74,17 @@ function deriveBrowserAction(a, ti, ps, s) {
     case 'Navigation/PUSH':
       return {
         type: 'PUSH',
-        newURL: '/' + getNewURLFromLatestRoute(ti, s),
+        newURL: '/' + getNewURLFromLatestRoute(navigator.flowName, s),
       };
     case 'Navigation/BACK':
       return {
         type: 'BACK',
-        newURL: '/' + getNewURLFromLatestRoute(ti, s),
+        newURL: '/' + getNewURLFromLatestRoute(navigator.flowName, s),
       };
     case 'INIT-PATH-AND-PARAMS':
       return {
         type: 'REPLACE',
-        newURL: '/' + getNewURLFromLatestRoute(ti, s),
+        newURL: '/' + getNewURLFromLatestRoute(navigator.flowName, s),
       };
     default:
       return {
@@ -104,13 +107,10 @@ function translateBrowserAction(history, browserAction) {
 
 export function createBrowserApp(App, { history: historyOption } = {}) {
   const history = getHistory(historyOption);
-  let currentPathAndParams = getPathAndParamsFromLocation(history.location);
-  console.log(currentPathAndParams);
-  const initAction =
-    App.router.getActionForPathAndParams(
-      currentPathAndParams.path,
-      currentPathAndParams.params
-    ) || NavigationActions.init();
+  console.log(App.flowName);
+  const initAction = App.router.getActionForPathAndParams(
+    getPathFromLocation(history.location)
+  );
 
   const setHistoryListener = (selff) => {
     const { setState, state, dispatch } = selff;
@@ -118,6 +118,7 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
       console.log('LOCATION:', location, action);
       switch (action) {
         case 'POP':
+          // TODO: support back and forward
           // if the key is in the store put it in the
           // Should check if forward or back
           const path = encodeURI(location.pathname.substr(1));
@@ -134,12 +135,12 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
     constructor(props) {
       super(props);
       const initState = App.router.getStateForAction(initAction);
-
+      console.log('INITIAL STATE:', initState);
       translateBrowserAction(
         history,
         deriveBrowserAction(
           initAction,
-          App.router.getTreeInfo(initState),
+          App, // App.router.getTreeInfo(initState),
           null,
           initState
         )
@@ -159,7 +160,6 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
       // /catalog/catalog-item?id=1234
       // -- Wala naman ata pake yun url since for first and second screen lang?
       // /scanqr/catalog/catalog-item?id=1234
-      console.log('INITIAL STATE:', initState);
       this.state = {
         nav: initState,
       };
@@ -212,9 +212,7 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
       return (
         <SafeAreaProvider>
           <NavigationProvider value={this._navigation}>
-            {this.state.nav ? (
-              <App {...this.props} navigation={this._navigation} />
-            ) : null}
+            <App {...this.props} navigation={this._navigation} />
           </NavigationProvider>
         </SafeAreaProvider>
       );
@@ -250,12 +248,7 @@ export function createBrowserApp(App, { history: historyOption } = {}) {
         if (action.type !== 'BROWSER_ACTION') {
           translateBrowserAction(
             history,
-            deriveBrowserAction(
-              action,
-              App.router.getTreeInfo(newState),
-              lastState,
-              newState
-            )
+            deriveBrowserAction(action, App, lastState, newState)
           );
         }
         // if stack look at routes and index and routeName, /scanqr/entermobile-1234

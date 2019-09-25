@@ -130,6 +130,7 @@ instance genToPushPartialNoInfo ::
     { routeName: reflectSymbol (SProxy :: SProxy routeName)
     , action: unsafeCoerce f -- a -> Flow
     }
+    -- shortCode <#>
 
 instance genToPushPartialWithInfo ::
   IsSymbol routeName =>
@@ -175,6 +176,7 @@ type NavPushHint
 
 class GenHint a where
   toPath :: a -> NavPushHint
+--  toHint :: NavPushHint -> Maybe a
 
 instance genHintSum ::
   ( GenHint l
@@ -236,6 +238,13 @@ instance toQueryStringInt :: ToQueryString Int where
 instance toQueryStringNumber :: ToQueryString Number where
   toQueryString n = show n
 
+instance toQueryStringMaybe :: ToQueryString a => ToQueryString (Maybe a) where
+  toQueryString = case _ of
+    Just v -> toQueryString v
+    Nothing -> ""
+
+
+
 -- Hints should be only with name and a flat record maximum usage of Primitive such as (Maybe, Boolean, Int, String)
 -- Hints should be with a name and an argument that is a record with key not being used
 -- hint -> String
@@ -270,6 +279,8 @@ resumeFlow ::
 resumeFlow nav flow = loop flow
   where
   loop f = case Free.resume (unwrap f) of
+    -- EnterShortCode (String -> Free ()) -- { params : { cb: String -> Free () }}
+    -- esc <#> \a -> { params: { cb: a }}
     Left (NavPush r h) -> dispatch nav $ unsafeToForeign (toPushAction r h)
     Left (NavAff aff) ->
       runAff_
@@ -301,6 +312,7 @@ withPageProps comp = FlowScreen $ toReactComponent identity withPagePropsC { ren
       -- get the action
       action :: a -> Flow hint route o
       action = getAction self.props.navigation
+    -- if there is path and path can be converted to hint then use notFromTheStart run with path
     in
       comp
         { submit: \a -> resumeFlow self.props.navigation (action a)
@@ -308,6 +320,7 @@ withPageProps comp = FlowScreen $ toReactComponent identity withPagePropsC { ren
  {-
  -- // TODO: implemenet codec for hint
  -- TODO: URL -> Maybe Hint -> Correct state or behavior
+ -- TODO: whats the difference between hint and info?
  -- TODO: implement codec for info
  -- TODO: implement other actions
  -- TODO: implemenet getting info for first screen???
