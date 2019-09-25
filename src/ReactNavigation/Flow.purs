@@ -168,6 +168,9 @@ genericToPushAction route hint =
 
   pp@{ routeName, action } = genToPushPartial <<< G.from $ route
 
+genericDecodeJsHint :: forall g a. Generic a g => GenHint g => NavPushHint -> Maybe a
+genericDecodeJsHint nph = toHint nph <#> G.to
+
 type NavPushPartial a
   = { routeName :: String
     , action :: Foreign -> a
@@ -188,7 +191,7 @@ instance genHintSum ::
   GenHint (Sum l r) where
   toPath (Inl l) = toPath l
   toPath (Inr r) = toPath r
-  toHint nph = toHint nph
+  toHint nph = toHint nph >>= Just <<< Inl
 
 instance genHintConstructorArgR ::
   ( IsSymbol hintName

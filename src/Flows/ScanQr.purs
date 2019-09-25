@@ -7,10 +7,10 @@ import Data.Maybe (Maybe(..))
 import Effect.Aff (Aff)
 import Effect.Aff.Class (liftAff)
 import Effect.Class.Console (logShow)
-import ExpN.ReactNavigation.Flow (class MonadNav, class ToPushAction, Flow, FlowScreen(..), genericToPushAction, navPush, navPush_, withPageProps)
+import ExpN.ReactNavigation.Flow (class MonadNav, class ToPushAction, Flow, FlowScreen(..), NavPushHint, genericDecodeJsHint, genericToPushAction, navPush, navPush_, withPageProps)
 import ExpN.Screens.QrScanner (qrScanner)
-import ExpN.Screens.ShortCode (shortCode)
 import ExpN.Screens.Receipt (receipt)
+import ExpN.Screens.ShortCode (shortCode)
 import ExpN.Screens.Types (QrScannerAction(..))
 
 type ReceiptD
@@ -84,6 +84,9 @@ realShortCode = withPageProps shortCode
 
 realReceipt :: FlowScreen ScanQrRoute ScanQrHint Unit
 realReceipt = withPageProps receipt
+
+scanQrDecodeHint :: NavPushHint -> Maybe ScanQrHint
+scanQrDecodeHint = genericDecodeJsHint
  {-
 -- scanQrFlow :: FlowNav STACK ScanQrRoute ScanQrAction Unit ScanQrHint
 -- scanQrFlow =

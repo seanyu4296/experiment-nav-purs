@@ -203,16 +203,10 @@ export default function createCustomNav(flowName, routeConfigs, config) {
         this.props.navigation.state &&
         this.props.navigation.state.hintFromPath
       ) {
-        console.log('WTf???');
-        //         setTimeout(() => {
-        // this.props.navigation.dispatch({
-        //   type: 'Navigation/PUSH',
-        //   routeName: 'ShortCode',
-        //   params: {
-        //     action: config.notFromTheStart,
-        //   },
-        // });
-        //        }, 1000);
+        console.log(
+          'DECODED HINT:',
+          config.hintDecode(this.props.navigation.state.hintFromPath)
+        );
       }
     }
     render() {

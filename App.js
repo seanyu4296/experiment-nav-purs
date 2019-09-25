@@ -6,6 +6,7 @@ import {
   fromTheStart,
   notFromTheStart,
   onShortCode,
+  scanQrDecodeHint
 } from './output/ExpN.Flows.ScanQr';
 import { createBrowserApp } from './createBrowserApp';
 import createCustomNav from './createCustomNav';
@@ -28,6 +29,7 @@ const ScanQrFlow = createCustomNav(
     initialRouteName: 'QrScanner',
     fromTheStart: fromTheStart,
     notFromTheStart: onShortCode,
+    hintDecode: scanQrDecodeHint
   }
 );
 const Root = createBrowserApp(ScanQrFlow);
