@@ -23,6 +23,8 @@ data ScanQrHint
   = ViewReceipt ReceiptD
   | EnterShortCode { code :: String }
 
+-- (Sum (Constructor "ViewReceipt" ))
+
 -- /viewreceipt?key=awdawdad&receipt=
 derive instance genericScanQrHint :: Generic (ScanQrHint) _
 

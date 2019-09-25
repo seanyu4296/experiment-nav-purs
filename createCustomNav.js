@@ -204,6 +204,10 @@ export default function createCustomNav(flowName, routeConfigs, config) {
         this.props.navigation.state.hintFromPath
       ) {
         console.log(
+          'HINT FROM PATH:',
+          this.props.navigation.state.hintFromPath
+        );
+        console.log(
           'DECODED HINT:',
           config.hintDecode(this.props.navigation.state.hintFromPath)
         );

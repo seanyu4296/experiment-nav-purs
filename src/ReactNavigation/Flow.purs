@@ -2,6 +2,7 @@ module ExpN.ReactNavigation.Flow where
 
 import Prelude
 import Prelude
+import Control.Alt ((<|>))
 import Control.Monad.Free (Free, liftF)
 import Control.Monad.Free as Free
 import Data.Either (Either(..))
@@ -191,7 +192,7 @@ instance genHintSum ::
   GenHint (Sum l r) where
   toPath (Inl l) = toPath l
   toPath (Inr r) = toPath r
-  toHint nph = toHint nph >>= Just <<< Inl
+  toHint nph = (toHint nph >>= Just <<< Inl) <|> (toHint nph >>= Just <<< Inr)
 
 instance genHintConstructorArgR ::
   ( IsSymbol hintName
