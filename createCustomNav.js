@@ -2,6 +2,9 @@ import { createStackNavigator } from 'react-navigation-stack';
 import { StyleSheet, Text, View, Button } from 'react-native';
 import React from 'react';
 
+/* eslint-disable import/no-commonjs */
+const queryString = require('query-string');
+
 export default function createCustomNav(flowName, routeConfigs, config) {
   const MyStack = createStackNavigator(routeConfigs);
   class CustomNavigator extends React.Component {
@@ -132,9 +135,13 @@ export default function createCustomNav(flowName, routeConfigs, config) {
                 routes: [initRoute],
               };
               if (remainingPath.length == 1) {
+                const [path, query] = remainingPath[0].split('?');
                 return {
                   ...baseNewState,
-                  hintFromPath: remainingPath[0],
+                  hintFromPath: {
+                    path,
+                    query: queryString.parse(query),
+                  },
                 };
               } else if (remainingPath.length > 1) {
                 // process it as a subflow to match
@@ -198,13 +205,13 @@ export default function createCustomNav(flowName, routeConfigs, config) {
       ) {
         console.log('WTf???');
         //         setTimeout(() => {
-        this.props.navigation.dispatch({
-          type: 'Navigation/PUSH',
-          routeName: 'ShortCode',
-          params: {
-            action: config.notFromTheStart,
-          },
-        });
+        // this.props.navigation.dispatch({
+        //   type: 'Navigation/PUSH',
+        //   routeName: 'ShortCode',
+        //   params: {
+        //     action: config.notFromTheStart,
+        //   },
+        // });
         //        }, 1000);
       }
     }

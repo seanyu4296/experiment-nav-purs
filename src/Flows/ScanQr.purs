@@ -84,8 +84,7 @@ realShortCode = withPageProps shortCode
 
 realReceipt :: FlowScreen ScanQrRoute ScanQrHint Unit
 realReceipt = withPageProps receipt
-
-
+ {-
 -- scanQrFlow :: FlowNav STACK ScanQrRoute ScanQrAction Unit ScanQrHint
 -- scanQrFlow =
 --   { fromTheStart

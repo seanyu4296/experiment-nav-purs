@@ -7,10 +7,12 @@ import Control.Monad.Free as Free
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic, Argument(..), Constructor(..), Product(..), Sum(..))
 import Data.Generic.Rep as G
+import Data.Int as Int
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
+import Data.Number as Number
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Debug.Trace (trace, traceM)
 import Effect (Effect)
@@ -27,7 +29,7 @@ import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import React.Basic (Component, JSX, ReactComponent, createComponent, makeStateless, toReactComponent)
 import React.Basic.Events (handler_)
 import React.Basic.Native as RN
-import Record (get)
+import Record (get, insert, delete)
 import Type.Data.RowList (RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -130,8 +132,8 @@ instance genToPushPartialNoInfo ::
     { routeName: reflectSymbol (SProxy :: SProxy routeName)
     , action: unsafeCoerce f -- a -> Flow
     }
-    -- shortCode <#>
 
+-- shortCode <#>
 instance genToPushPartialWithInfo ::
   IsSymbol routeName =>
   GenToPushPartial (Constructor routeName (Product (Argument info) (Argument (i -> a)))) a where
@@ -175,8 +177,9 @@ type NavPushHint
   = { path :: String, query :: Object String }
 
 class GenHint a where
+  -- Rename toJsHint -- fromJsHint
   toPath :: a -> NavPushHint
---  toHint :: NavPushHint -> Maybe a
+  toHint :: NavPushHint -> Maybe a
 
 instance genHintSum ::
   ( GenHint l
@@ -185,12 +188,13 @@ instance genHintSum ::
   GenHint (Sum l r) where
   toPath (Inl l) = toPath l
   toPath (Inr r) = toPath r
+  toHint nph = toHint nph
 
 instance genHintConstructorArgR ::
   ( IsSymbol hintName
   , Row.Lacks "key" r
   , RowToList r rl
-  , ToQuery rl r
+  , QueryParamCodec rl r
   ) =>
   GenHint (Constructor hintName (Argument { | r })) where
   toPath (Constructor (Argument val)) = { path, query }
@@ -198,20 +202,30 @@ instance genHintConstructorArgR ::
     path = reflectSymbol (SProxy :: SProxy hintName)
 
     query = toQuery (RLProxy :: RLProxy rl) val
+  toHint { path, query } = case path == hn of
+    true -> do
+      record <- fromQuery (RLProxy :: RLProxy rl) query
+      pure $ (Constructor (Argument record) :: Constructor hintName (Argument { | r }))
+    false -> Nothing
+    where
+    hn = reflectSymbol (SProxy :: SProxy hintName)
 
-class ToQuery (rl :: RowList) (r :: #Type) where
+class QueryParamCodec (rl :: RowList) (r :: #Type) | rl -> r where
   toQuery :: RLProxy rl -> { | r } -> Object String
+  fromQuery :: RLProxy rl -> Object String -> Maybe { | r }
 
-instance toQueryNil :: ToQuery Nil r where
+instance queryParamCodecNil :: QueryParamCodec Nil () where
   toQuery _ _ = FO.empty
+  fromQuery _ _ = Just {}
 
-instance toQueryCons ::
+instance queryParamCodecCons ::
   ( IsSymbol name
-  , ToQueryString typ
-  , Row.Cons name typ etc r
-  , ToQuery tailrl r
+  , QueryStringCodec typ
+  , Row.Cons name typ tailR rows -- rows is the summation of all the rows, tailR is the remaining rows unprocessed,
+  , Row.Lacks name tailR
+  , QueryParamCodec tailrl tailR
   ) =>
-  ToQuery (Cons name typ tailrl) r where
+  QueryParamCodec (Cons name typ tailrl) rows where
   toQuery _ r = FO.insert key value tail
     where
     sp = SProxy :: SProxy name
@@ -220,30 +234,51 @@ instance toQueryCons ::
 
     value = toQueryString $ get sp r
 
-    tail = toQuery (RLProxy :: RLProxy tailrl) r
+    -- How did this work???
+    tail = toQuery (RLProxy :: RLProxy tailrl) (delete sp r)
+  fromQuery _ o = do
+    let
+      sp = SProxy :: SProxy name
 
-class ToQueryString a where
+      keyN = reflectSymbol sp
+    val <- FO.lookup keyN o >>= fromQueryString
+    tail <- fromQuery (RLProxy :: RLProxy tailrl) o
+    pure $ insert sp val tail
+
+class QueryStringCodec a where
   toQueryString :: a -> String
+  fromQueryString :: String -> Maybe a
 
-instance toQueryStringString :: ToQueryString String where
+instance queryStringCodecString :: QueryStringCodec String where
   toQueryString = identity
+  fromQueryString = case _ of
+    "" -> Nothing
+    s -> Just s
 
-instance toQueryStringBoolean :: ToQueryString Boolean where
+instance queryStringCodecBoolean :: QueryStringCodec Boolean where
   toQueryString true = "true"
   toQueryString false = "false"
+  fromQueryString = case _ of
+    "true" -> Just true
+    "false" -> Just false
+    _ -> Nothing
 
-instance toQueryStringInt :: ToQueryString Int where
+instance queryStringCodecInt :: QueryStringCodec Int where
   toQueryString i = show i
+  fromQueryString = Int.fromString
 
-instance toQueryStringNumber :: ToQueryString Number where
+instance queryStringCodecNumber :: QueryStringCodec Number where
   toQueryString n = show n
+  fromQueryString = Number.fromString
 
-instance toQueryStringMaybe :: ToQueryString a => ToQueryString (Maybe a) where
+-- Maybe (Maybe shouldnt be here it should be in toQuery)???
+instance queryStringCodecMaybe :: QueryStringCodec a => QueryStringCodec (Maybe a) where
   toQueryString = case _ of
     Just v -> toQueryString v
     Nothing -> ""
-
-
+  fromQueryString = case _ of
+    "" -> Nothing
+    x -> fromQueryString x
 
 -- Hints should be only with name and a flat record maximum usage of Primitive such as (Maybe, Boolean, Int, String)
 -- Hints should be with a name and an argument that is a record with key not being used
